@@ -14,12 +14,12 @@ Further studies could scale this approach to analyze all Debian packages regular
 ## Build docker image
 Build the docker image local
 ```
-docker build -t supply-graph .
+docker build -t supply-graph:main .
 ```
 
 Or pull from github container registry:
 ```
-TODO
+docker pull ghcr.io/fraunhofer-aisec/supply-graph:main
 ```
 
 ## Analyze build process
@@ -31,7 +31,7 @@ In the docker container, the following Debian packet builds are included:
 
 Run the analysis:
 ```
-docker run --rm -it supply-graph
+docker run --rm -it supply-graph:main
 analyze-build-graph xz-5.6.1
 ```
 Identified anomalies in the supply graph are displayed at the end of the log:
