@@ -37,8 +37,8 @@ The **supply graph** is a directed graph representing data flow during a Debian 
 By verifying that all distributed binaries (`.o`, `.a`, executables) are reachable from upstream source files through legitimate compilation processes, anomalies indicating supply chain attacks can be identified.
 
 Notable challenges:
-* Build processes (especially autotools) perform unexpected operations like overwriting files with different content, moving, and copying -> content and time relevance
-* Some compilation steps communicate not only via files but also via pipes (stdin/stdout) -> just filesystem view is not sufficent
+* Build processes (especially autotools) perform unexpected operations like overwriting files with different content, moving, and copying (requires tracking content and timing)
+* Some compilation steps communicate not only via files but also via pipes (stdin/stdout), so a filesystem-only view is not sufficient
 
 The main entry point is the [build.sh](bin/build.sh) script, which orchestrates the package build and monitoring.
 
@@ -60,6 +60,7 @@ Different methods exist on Linux to trace what happens inside a build system. Th
 * debuild / dpkg-source
 * chroot
 * libfuse3
+* boost
 * [Kuzu](https://kuzudb.com/) graph database
 
 ## Getting Started
@@ -195,6 +196,12 @@ A possible workaround is to run the build step inside the container and monitor 
 * Docker compatibility
 * Evaluate [Tetragon](https://tetragon.io/) as an alternative to bpftrace
 
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).
+
 ## Acknowledgments
+
+This project is developed by [Fraunhofer AISEC](https://www.aisec.fraunhofer.de/).
 
 This work was funded by the German Federal Ministry of Education and Research (BMBF) as part of the [ALPAKA](https://www.forschung-it-sicherheit-kommunikationssysteme.de/projekte/alpaka) project.
