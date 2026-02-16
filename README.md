@@ -11,11 +11,11 @@ Further studies could scale this approach to analyze all Debian packages regular
 > [!WARNING]
 > This project is not maintained and only for research purpose!
 
-The current implementation does not support docker environments and is meant to be run in a debian linux and might modify the system.
+The current implementation does not support docker environments and is meant to be run in a debian linux and might modify the system (installs packages, creates files and folders).
 
 ## Publications
-* [FOSDEM 2025](https://fosdem.org/2025/schedule/event/fosdem-2025-5224-finding-anomalies-in-the-debian-packaging-system-to-detect-supply-chain-attacks/) - (git tag)[https://github.com/Fraunhofer-AISEC/supply-graph/releases/tag/v0.1]
-* [ALPSS 2025 -  Detecting Supply Chain Attacks from the Filesystem Level with eBPF, fanotify and others](https://alpss.at/#schedule) - (git - tag)[https://github.com/Fraunhofer-AISEC/supply-graph/releases/tag/v0.2]
+* [FOSDEM 2025](https://fosdem.org/2025/schedule/event/fosdem-2025-5224-finding-anomalies-in-the-debian-packaging-system-to-detect-supply-chain-attacks/) - (git tag)[https://github.com/Fraunhofer-AISEC/supply-graph/releases/tag/v0.1] - (slices)[doc/FOSDEM_2025_Lightning_Talk_Supply_Graph.pdf]
+* [ALPSS 2025 -  Detecting Supply Chain Attacks from the Filesystem Level with eBPF, fanotify and others](https://alpss.at/#schedule) - (git - tag)[https://github.com/Fraunhofer-AISEC/supply-graph/releases/tag/v0.2] - (slides)[doc/ALPSS_2025_Talk_File_System_Monitoring.pdf]
 
 ## Requirements
 * sudo
@@ -24,15 +24,20 @@ The current implementation does not support docker environments and is meant to 
 * debuild
 * chroot
 * libfuse
+* kuzu graph database
 
-## Technical details
+## Architecture
 
 The implementation uses a combination of bpftrace and a custom fuse overlay filesystem to capture all filesystem and IPC (pipe) communication during the build process.
 Notable:
 * build processes (escpecially autotools) do wired stuff like overwrite files with different content, move, copy
 * some compilation steps communicatio not only via files, but also via pipe (stdin/stdout)
 
+Main entry point is the (build.sh)[bin/build.sh] script, which orchestrates the package build and monitoring part.
+
 ## alternatie build tracing methods
+There exist different methods on linux to trace what happs inside a build system.
+Some have been also tryied as part of this project:
 * llvm compile commands (bear, CodeChecker analyze)
 * fanotify
 
@@ -63,29 +68,77 @@ uv sync
 Run the analysis:
 ```
 sudo ./bin/build.sh data/xz-5.6.1/xz-utils_5.6.1-1.dsc
-analyze-build-graph xz-5.6.1
+uv run analyze-fuse-graph data/xz-5.6.1/
 ```
 
 Identified anomalies in the supply graph are displayed at the end of the log:
 ```
 [...]
-Root files not part of upstream:
-* /data/xz-5.6.1/xz-utils-5.6.1/debian/normal-build/src/liblzma/liblzma_la-crc64-fast.o
-Binary files without corresponding source code:
-* /data/xz-5.6.1/xz-utils-5.6.1/debian/normal-build/src/liblzma/liblzma_la-crc64-fast.o
+Import into Kuzu DB...
+Analyzing Graph...
+[...]
+```
+```json
+{
+    "object-source-proc": [
+        "as",
+        "cp",
+        "head",
+        "ld",
+        "strip"
+    ],
+    "bad-object-source": [
+        {
+            "_id": {
+                "offset": 3763,
+                "table": 1
+            },
+            "_label": "File",
+            "hash": "b418bfd34aa246b2e7b5cb5d263a640e5d080810f767370c4d2c24662a2749634735887",
+            "inode": "4735887",
+            "sha256": "b418bfd34aa246b2e7b5cb5d263a640e5d080810f767370c4d2c24662a274963",
+            "path": "/home/tobias/Downloads/supply-graph-github/data/xz-5.6.1/xz-utils-5.6.1/debian/normal-build/src/liblzma/liblzma_la-crc64-fast.o",
+            "name": "liblzma_la-crc64-fast.o",
+            "type": ".o",
+            "is_upstream": false
+        }
+    ],
+    "top-level-file-types": [
+        "",
+        ".0t",
+        ".1",
+        ".Debian",
+        ".ac",
+        ".am",
+        ".docs",
+        ".gmo",
+        ".in",
+        ".inc",
+        ".lzma",
+        ".m4",
+        ".map"
+    ]
+}
 ```
 
 ## Artifacts
 The following build artifacts are available:
-* edges.csv (supply graph edge list)
-* nodes.csv (supply graph node list)
-* compile_commands.json (trace of build process)
+* bpftrace.json (IPC communication trace)
+* fuse.json (filesystem trace)
+* build.log (log of packet build)
+* db.kuzu (kuzu graph database popolated with supply graph)
 * packet.files.csv (list of files per Debian packet)
 * upstream_files.txt (list of files in upstream archive)
+* result.json (analysis result with any anomalies)
 
 ## Visualize supply graph
-Use `nodes.csv` and `edges.csv` to visualize the supply graph.
-E.g. with: https://cytoscape.org/
+Use kuzu web ui to brows and vidualize the graph:
+```
+docker run -p 8000:8000 \
+    -v ./data/xz-5.6.1/db:/database:Z \
+    -e KUZU_FILE=db.kuzu \
+    --rm kuzudb/explorer:latest 
+```
 
 # Futur work
 * make it compatibel with docker
