@@ -1,0 +1,31 @@
+config = {
+    max_map_keys=100000;
+    perf_rb_pages=1024;
+}
+
+tracepoint:syscalls:sys_enter_read,
+tracepoint:syscalls:sys_enter_write
+/ args->fd >= 0 &&
+    curtask->files && curtask->files->fdt &&
+    curtask->files->fdt->fd[args->fd] &&
+    curtask->files->fdt->fd[args->fd]->f_inode &&
+    ((curtask->files->fdt->fd[args->fd]->f_inode->i_mode & 61440) == 4096) &&
+    ((uint64)curtask->files->fdt->fd[args->fd]->f_inode->i_sb->s_magic == 0x50495045) &&
+    !@pipes[pid, curtask->files->fdt->fd[args->fd]->f_inode->i_ino] /
+{
+    $t = elapsed;
+    $f = curtask->files->fdt->fd[args->fd];
+    @pipes[pid, $f->f_inode->i_ino] = 1;
+    printf("{\"elapsed\": %lu, \"poc\": \"%s\", \"pid\": %d, \"action\": \"%s\", \"fd\": %d, \"inode\": %llu}\n",
+            $t, comm, pid, probe, args->fd, $f->f_inode->i_ino);
+}
+
+tracepoint:syscalls:sys_enter_close
+/@pipes[pid, args->fd]/
+{
+    delete(@pipes, (pid, args->fd));
+}
+
+END {
+    clear(@pipes);
+}
