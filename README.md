@@ -9,31 +9,63 @@ Further studies could scale this approach to analyze all Debian packages regular
 > This project contains the CVE-2024-3094 and is only meant for research and demonstration purpose!
 
 > [!WARNING]
-> This project is not maintained. It has been published as part of the following conference talk: [FOSDEM 2025](https://fosdem.org/2025/schedule/event/fosdem-2025-5224-finding-anomalies-in-the-debian-packaging-system-to-detect-supply-chain-attacks/)
+> This project is not maintained and only for research purpose!
 
-## Build docker image
-Build the docker image local
-```
-docker build -t supply-graph:main .
-```
+The current implementation does not support docker environments and is meant to be run in a debian linux and might modify the system.
 
-Or pull from github container registry:
-```
-docker pull ghcr.io/fraunhofer-aisec/supply-graph:main
-```
+## Publications
+* [FOSDEM 2025](https://fosdem.org/2025/schedule/event/fosdem-2025-5224-finding-anomalies-in-the-debian-packaging-system-to-detect-supply-chain-attacks/) - (git tag)[https://github.com/Fraunhofer-AISEC/supply-graph/releases/tag/v0.1]
+* [ALPSS 2025 -  Detecting Supply Chain Attacks from the Filesystem Level with eBPF, fanotify and others](https://alpss.at/#schedule) - (git - tag)[https://github.com/Fraunhofer-AISEC/supply-graph/releases/tag/v0.2]
+
+## Requirements
+* sudo
+* python uv
+* bpftrace
+* debuild
+* chroot
+* libfuse
+
+## Technical details
+
+The implementation uses a combination of bpftrace and a custom fuse overlay filesystem to capture all filesystem and IPC (pipe) communication during the build process.
+Notable:
+* build processes (escpecially autotools) do wired stuff like overwrite files with different content, move, copy
+* some compilation steps communicatio not only via files, but also via pipe (stdin/stdout)
+
+## alternatie build tracing methods
+* llvm compile commands (bear, CodeChecker analyze)
+* fanotify
+
+## Docker
+Problems with docker:
+* bpftrace does currently not work inside docker (https://github.com/bpftrace/bpftrace/issues/4384)
+* different views regarding PIN namepsace between eBPF (kernel space) and fuse-fs (userspace/inside container)
+
+Possible solution:
+run only build step inside container and monitor from outside
 
 ## Analyze build process
-In the docker container, the following Debian packet builds are included:
+With the preparation script, the following Debian packet builds can be downloaded:
 * xz-5.6.1 (CVE-2024-3094)
 * xz-5.6.2
 * openssh-9.2p1
 * openssl-3.0.15
 
+```
+./preaper.sh
+ls data/
+openssh-9.2p1/  openssl-3.0.15/  xz-5.6.1/  xz-5.6.2/
+make
+make install
+uv sync
+```
+
 Run the analysis:
 ```
-docker run --rm -it supply-graph:main
+sudo ./bin/build.sh data/xz-5.6.1/xz-utils_5.6.1-1.dsc
 analyze-build-graph xz-5.6.1
 ```
+
 Identified anomalies in the supply graph are displayed at the end of the log:
 ```
 [...]
@@ -43,7 +75,7 @@ Binary files without corresponding source code:
 * /data/xz-5.6.1/xz-utils-5.6.1/debian/normal-build/src/liblzma/liblzma_la-crc64-fast.o
 ```
 
-## Download artifacts
+## Artifacts
 The following build artifacts are available:
 * edges.csv (supply graph edge list)
 * nodes.csv (supply graph node list)
@@ -51,15 +83,13 @@ The following build artifacts are available:
 * packet.files.csv (list of files per Debian packet)
 * upstream_files.txt (list of files in upstream archive)
 
-Download the artifacts from the container:
-```
-docker cp <Container-ID>:/data/xz-5.6.1/edges.csv .
-docker cp <Container-ID>:/data/xz-5.6.1/nodes.csv .
-```
-
 ## Visualize supply graph
 Use `nodes.csv` and `edges.csv` to visualize the supply graph.
 E.g. with: https://cytoscape.org/
+
+# Futur work
+* make it compatibel with docker
+* try https://tetragon.io/ instead of bpftrace
 
 ## Acknowledgments
 

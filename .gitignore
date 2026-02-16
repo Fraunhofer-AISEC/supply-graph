@@ -3,3 +3,4 @@ __pycache__
 .idea
 fuse-hash-fs
 supply-graph
+data/

@@ -185,9 +185,10 @@ and not l.path =~ "/etc/.*"
 return DISTINCT l.type''')
     res["top-level-file-types"] = sorted([row[0] for row in ret])
 
-    print(res)
+    txt = json.dumps(res, indent=4)
+    print(txt)
     with open("result.json", "wt") as f:
-        json.dump(res, f, indent=4)
+        f.write(txt)
 
 
 if __name__ == '__main__':
