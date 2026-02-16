@@ -125,5 +125,3 @@ do
     pkt=$(echo $deb_|awk -F_ '{print $1}')
     dpkg -c "$deb"| grep "^-"|awk -v pwd=$PWD -v pkt=$pkt '{print pwd"/debian/"pkt"/"$6}' | xargs -L1 realpath -m| awk -v deb="$deb" '{print deb","$NF}'
 done > packet.files.csv
-
-uv --project $base_dir run analyze-fuse-graph . |tee fuse-graph.log
