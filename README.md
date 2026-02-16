@@ -47,7 +47,7 @@ The main entry point is the [build.sh](bin/build.sh) script, which orchestrates 
 Different methods exist on Linux to trace what happens inside a build system. The following have been explored as part of this project:
 
 * LLVM compile commands ([Bear](https://github.com/rizsotto/Bear), [CodeChecker log](https://github.com/Ericsson/codechecker))
-* [fanotify](https://man7.org/linux/man-pages/man7/fanotify.7.html) ([fanotify_logger.c](src/fanotify_logger.c))
+* [fanotify](https://man7.org/linux/man-pages/man7/fanotify.7.html) ([fanotify_logger.c++](src/fanotify_logger.c++))
 
 ## Requirements
 
