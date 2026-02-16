@@ -7,6 +7,7 @@ then
     exit 1
 fi
 
+base_dir=$(realpath $(dirname $(realpath $0))/../)
 pkt_dsc=$(realpath $1)
 data_dir=$(dirname $pkt_dsc)
 pkg_name=`basename $pkt_dsc|awk -F_ '{print $1}'`
@@ -53,33 +54,76 @@ mkdir "$build_dep_dir" # build dependencies
 apt-get -d -y build-dep "$pkg_name"
 
 # install downloaded build dependencies
-export DEB_BUILD_OPTIONS='nocheck nodoc'
+export DEB_BUILD_OPTIONS="nocheck nodoc parallel=1"
 apt-get --no-download -y build-dep "$pkg_name"
 
 # enter source directory
 cd $source_dir
 
-# create compilation database
-debuild -- clean
-export DEB_BUILD_OPTIONS="parallel=1"
-
-debian/rules configure || true
-. /opt/codechecker/venv/bin/activate
-CC_LOGGER_ABS_PATH=true CodeChecker log -k --output "/tmp/compile_commands.json" --build "debian/rules build binary"
-
-cp /tmp/compile_commands.json ../compile_commands.json
-convert_cc.py ../compile_commands.json
-
-ls ../*.deb|while read deb
-do
-    deb_=$(basename $deb)
-    pkt=$(echo $deb_|awk -F_ '{print $1}')
-    dpkg -c "$deb"| grep "^-"|awk -v pwd=$PWD -v pkt=$pkt '{print pwd"/debian/"pkt"/"$6}' | xargs -L1 realpath -m| awk -v deb="$deb_" '{print deb","$NF}'
-done > ../packet.files.csv
-
 orig_tar=`ls ../${pkg_name}_*.orig.tar.??`
 echo "orig_tar: $orig_tar"
 tar tf $orig_tar |while read line
 do
-    readlink -m $PWD/$(echo $line | cut -d'/' -f2-)
-done > ../upstream_files.txt
+    path=$(readlink -m $PWD/$(echo $line | cut -d'/' -f2-))
+    inode=-1
+    hash=""
+    if [ -f $path ]
+    then
+        inode=$(stat -c '%i' $path)
+        hash=$(sha256sum $path|awk '{print $1}')
+    fi
+    echo $path,$inode,$hash
+done > ../upstream_files.csv
+
+deb_tar=`ls ../${pkg_name}_*.debian.tar.??`
+echo "deb_tar: $deb_tar"
+tar tf $deb_tar |while read line
+do
+    path=$(readlink -m $PWD/$(echo $line | cut -d'/' -f1-))
+    inode=-1
+    hash=""
+    if [ -f $path ]
+    then
+        inode=$(stat -c '%i' $path)
+        hash=$(sha256sum $path|awk '{print $1}')
+    fi
+    echo $path,$inode,$hash
+done >> ../upstream_files.csv
+
+# create compilation database
+debuild -- clean
+
+ulimit -n 512000
+mkdir -p /tmp/data
+mkdir -p /mnt/proc
+mkdir -p /mnt/dev/pts
+mkdir -p /mnt/sys/kernel/debug
+fuse-hash-fs -f /mnt -o max_idle_threads=100000 2>../fuse.json 1> ../fuse.log &
+FUSE_PID=$!
+sleep 5
+mount -o bind /proc /mnt/proc
+mount -o bind /dev /mnt/dev
+mount -o bind /dev/pts /mnt/dev/pts
+mount -o bind /sys /mnt/sys
+mount -o bind /sys/kernel/debug /mnt/sys/kernel/debug
+mount -o bind $(realpath ..) /mnt/tmp/data
+chroot /mnt $base_dir/bin/build_deb.sh $source_dir 2>&1 |tee ../build.log
+umount /mnt/sys/kernel/debug
+umount /mnt/sys
+umount /mnt/dev/pts
+umount /mnt/dev
+umount /mnt/proc
+umount /mnt/tmp/data
+fusermount -u /mnt
+wait $FUSE_PID
+
+cd ..
+ls *.deb|while read deb
+do
+    deb=$(realpath $deb)
+    deb_=$(basename $deb)
+    pkt=$(echo $deb_|awk -F_ '{print $1}')
+    dpkg -c "$deb"| grep "^-"|awk -v pwd=$PWD -v pkt=$pkt '{print pwd"/debian/"pkt"/"$6}' | xargs -L1 realpath -m| awk -v deb="$deb" '{print deb","$NF}'
+done > packet.files.csv
+
+uv --project ~/Downloads/supply-graph/ run analyze-fuse-graph . |tee fuse-graph.log

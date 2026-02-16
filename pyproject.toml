@@ -14,6 +14,8 @@ dependencies = [
     "pandas >=2.1.2",
     "numpy >=2.2.0",
     "networkx>=3.4.2",
+    "pyfanotify>=0.3.0",
+    "kuzu>=0.8.0",
 ]
 
 # TODO: Change to dependency-groups once https://github.com/pypa/pip/issues/12963 is resolved
@@ -27,6 +29,7 @@ dev = [
 
 [project.scripts]
 "analyze-build-graph" = "SupplyGraph.main:main"
+"analyze-fuse-graph" = "SupplyGraph.fuse_graph:main"
 
 [tool.mypy]
 strict = true
